@@ -1,0 +1,661 @@
+---
+title: "Causal Inference Analysis of Asthma"
+subtitle: "WCM Modern Methods for Causal Inference Final Project"
+author: "Yunqing Ma, Xiang Li, Yifan Wu"
+date: "Aug 12, 2021"
+output:
+ html_document:
+   df_print: paged
+   toc: true # table of contents
+   toc_depth: 2  #three depths of headings (specified by #, ## and ###)
+   number_sections: false
+   theme: default    #many other themes as well
+   highlight: tango  # specifies the syntax highlighting style
+   toc_float:
+     collapsed: true
+     smooth_scroll: true
+   code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE,message=FALSE)
+```
+
+
+# 1. Introduction & Background
+Asthma is a long-term inflammatory disease of the airways of the lungs. (WHO,2013) There is no known cure for asthma, but it is easily treatable. Since no definite cure is found for asthma, the reaction after the treatment assignment from the asthma patients tends to be important to tell whether the treatment effect is ideal or not. Treatment assignments usually varies from doctor to doctor, which is inclined to lead to different therapeutic effects. Whether there is significant difference between different treatment assignments for asthma have attracted lots of attention from patients and physicians nowadays. Thus, this study focuses on analyzing how different factors indicating the causal inference to the result of treatment satisfaction.
+
+## 1.1 Overview of the basic information
+
+Preprocessing data includes the contengency table and visualization on distributions. We first take a look at the dataset.  
+
+**The following are the outline of dataset: **  
+
++ `Physician Group`: treatment assignment (categorical, 1 or 2)  
+
++ `Age`: patients' ages (continuous)  
+
++ `Sex`: patients' genders (binary)  
+
++ `Education`: patients' education levels (categorical)  
+
++ `Insurance Status`: patients' insurance coverage levels (categorical)  
+
++ `Drug Coverage Status`: the current status of patients whether they take the medicine (binary, yes or no)  
+
++ `Severity`: the severity level of asthma (categorial)  
+
++ `Total Number of Comorbidity`: patients' comorbidity (numerical)  
+
++ `Standard Physical Comorbidity Scale`: patients' physical comorbidity in the standard scale (continuous)  
+
++ `Standard Mental Comorbidity Scale`: patients' mental comorbidity in the standard scale (continuous)  
+
++ `Satisfaction Status of Patient`: the outcome of the treatment (binary, yes or no)  
+
+The dimension of this dataset is 276 × 11. There are 276 observations and 11 variables. No missing values are found. First 6 observations are shown below to have a basic idea on the whole dataset (Table 1).
+
+```{r}
+asthma <- read.table("asthma.txt", sep = "" , header = T , na.strings ="", stringsAsFactors= F)
+
+library(tidyverse)
+asthma$pg <- as.factor(asthma$pg)
+asthma$i.sex = fct_collapse(factor(asthma$i.sex), Female = "1", Male = "0")
+asthma$i.educ <- as.factor(asthma$i.educ)
+asthma$i.insu <- as.factor(asthma$i.insu)
+asthma$i.drug = fct_collapse(factor(asthma$i.drug), Yes = "1", No = "0")
+asthma$i.seve <- as.factor(asthma$i.seve)
+asthma$i.aqoc = fct_collapse(factor(asthma$i.aqoc), Yes = "1", No = "0")
+asthma$pcs.sd <- round(asthma$pcs.sd, 3)
+asthma$mcs.sd <- round(asthma$mcs.sd, 3)
+
+colnames(asthma)=c("Physician Group","Age","Sex","Education","Insurance Status","Drug Coverage Status","Severity","Total Number of Comorbidity","Standard Physical Comorbidity Scale","Standard Mental Comorbidity Scale","Satisfaction Status of Patient")  
+
+library(kableExtra)
+head(asthma)  %>%  kable(align = 'c', caption = "Table 1. Basic Information on Patients") %>% kable_classic_2()
+
+```
+We then draw the contingency table for 10 factors corresponding to the satisfaction status of patients (Table 2). We find more patients in the physician group 2. The treatment satisfaction rates between two physician groups are also different (77.9% VS 61.0%).  
+
+```{r}
+library(compareGroups)
+library(dplyr)
+library(kableExtra) 
+
+out <- compareGroups(`Satisfaction Status of Patient` ~ ., data = asthma, method = c(3,1,3,3,3,3,3,1,1,1), include.label = TRUE, simplify = T, byrow = TRUE)
+res <- createTable(out, show.p.overall = F, extra.labels = c("","", ""))
+
+compareGroups::export2md(res, caption = "Table 2. Contingency Table for the Quality of Service provided by Two Physician Groups") %>% kable_styling(c("responsive", "condensed", "hover"), fixed_thead = T)
+
+
+```
+
+## 1.2 Data visualization
+
+After viewing the contengency table, we continue the overview on the distribution of numerical variables, including the age, Standard Physical Comorbidity Scale,Standard Mental Comorbidity Scale.
+
+
+**Age**
+
+```{r}
+patient1 <- asthma %>% filter(`Physician Group` == 1)
+patient2 <- asthma %>% filter(`Physician Group` == 2)
+
+
+attach(mtcars)
+par(mfrow=c(1,2))
+
+x<-patient1$Age
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Age",xlim=c(0,70),
+        ylim=c(0,0.08),main="Histogram with Density Curve \nfor Patient Group 1 by Age")
+#lines(density(x),col="blue", lwd=2)
+
+x<-patient2$Age
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Age",xlim=c(0,70),
+        ylim=c(0,0.08),main="Histogram with Density Curve \nfor Patient Group 2 by Age")
+
+```
+
+**Physical Comorbidity**
+
+```{r}
+par(mfrow=c(1,2))
+
+x<-patient1$`Standard Physical Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Physical Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.05),main="Histogram with Density Curve \nfor Patient Group 1 by \nPhysical Comorbidity")
+#lines(density(x),col="blue", lwd=2)
+
+x<-patient2$`Standard Physical Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Physical Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.06),main="Histogram with Density Curve \nfor Patient Group 2 by \nPhysical Comorbidity")
+```
+
+**Mental Comorbidity**
+
+```{r}
+par(mfrow=c(1,2))
+
+x<-patient1$`Standard Mental Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Mental Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.05),main="Histogram with Density Curve \nfor Patient Group 1 by \nMental Comorbidity")
+#lines(density(x),col="blue", lwd=2)
+
+x<-patient2$`Standard Mental Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Mental Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.05),main="Histogram with Density Curve \nfor Patient Group 2 by \nMental Comorbidity")
+
+
+
+```
+
+The six above histograms show that the distribution of different factors in the dataset is roughly centered.
+
+Typically, for patients’ physical comorbidity, boxplots drawn below illustrate the difference in treatment outcomes between physician groups 1 and 2. In terms of mental comorbidity, there are the same results from two physician groups.
+
+```{r}
+ggplot(asthma, aes(x =`Physician Group` , y = `Standard Physical Comorbidity Scale`)) +
+    geom_boxplot() +
+    ggtitle('Boxplot of Standard physical comorbidity scale by different treatment assignment') +
+    xlab('Treatment assignment') +
+    ylab('Standard physical comorbidity scale')
+
+
+
+```
+
+```{r}
+ggplot(asthma, aes(x =`Physician Group` , y = `Standard Mental Comorbidity Scale`)) +
+    geom_boxplot() +
+    ggtitle('Boxplot of Standard Mental comorbidity scale by different treatment assignment') +
+    xlab('Treatment assignment') +
+    ylab('Standard Mental comorbidity scale')
+
+
+```
+
+# 2. Scientific Question
+
+**This project will analyze the treatment satisfaction from asthma patients to determine whether different treatment assignments will significantly affect the treatment effect.** 
+Our target population is asthma patients in California treated 276 patients that ranges from 19 to 55 years old in their own assignments.
+
+# 3. Structural Causal Model (SCM)
+
+**Definition:**
+Let **$W_1$** denote the indicator that whether the patient's age is over mean age from all 276 patients or not with $W_1=1$ being over mean age and $W_1= 0$ is not.   
+Let **$W_2$** denote the patient's sex with $W_2= 1$ being male and $W_2= 0$ female.   
+Let **$W_3$** denote the indicator that whether the patient's severity of asthma disease that ranges from 0 to 5 is greater than or equal to 3 or not with $W_3= 1$ being greater than or equal to 3 and $W_3 = 0$ is not.  
+Let **$W_4$** be the indicator that whether the physical and mental comorbidity scale is larger than or equal to half of the scale, $W_4= 1$ being larger or equal to half of the scale and $W_4= 0$ is not.   
+Let **$W_5$** denote the indicator that whether the patient's education status is greater than or equal to 4 that ranges from 1 to 6 and that can be consider as high level education with $W_5= 1$ greater or equal to 4 and $W_5= 0$ is not.   
+Let **$W_6$** denote the indicator that whether the patient is insured or not with $W_6= 1$ as insured and $W_6= 0$ is not.   
+Let **A** be an indicator that which treatment from the two physical groups is assigned to the patient.  
+Let **Y** be an indicator of whether the patients is satisfied for the treatment he/she being assigned or not with $Y_1=1$ as satisfied and $Y_2=0$ as not satisfied.   
+
+The reason why we choose to transform some variables to be indicator is for the application of positivity assumption since we only have 276 observations and for some variables like age that has a wide range of values with few observations. The assumption may not be met due to this situation. 
+
+so we have the Endogenous variables: \
+**$W_1$** : Indicator of patient's age is over mean age or not (1 = over , 0 = not) \
+**$W_2$** : Patient's sex (1 = male , 2 = female)  \
+**$W_3$** : Indicator of the patient's severity of asthma disease is larger than or equal to 3 or not (1 = larger or equal to 3, 2 = not)\
+**$W_4$** : Indicator of the physical and mental comorbidity scale is greater than or equal to half of the scale or not (1 = greater or equal to half of the scale , 2 = not) \
+**$W_5$** : Indicator of the patient's education status is greater than or equal to 4 or not (1 = greater or equal to 4 , 0 = not) \
+**$W_6$** : Indicator of the insurance status of the patient (1 = insured ,0 = not)\
+**A** : Treatment assignment (1 = from physician group 1, 0 = from physician group 2)\
+**Y** : Indicator of a patient if he/she is satisfied for the treatment he/she being assigned or not (1 = satisfied,0 = not satisfied) \
+
+Exogenous variables $U$ are additional background information corresponding to each variable above. They impact each variable respectively. They follow the distribution $P^*$ as the following:  
+**($U_{W_1}$,$U_{W_2}$,$U_{W_3}$,$U_{W_4}$,$U_{W_5}$,$U_{W_6}$,$U_A$,$U_Y$)$∼P^∗$**
+
+This study can be translated into the following directed acyclic graph (DAG) shown in Figure 1 and a simpler version that removes exogenous variables is shown in Figure 2.  
+
+For variables `age` and `sex`, we make a assumption that they don't directly affect outcome variable $Y$. The reason for that is the risk brought by `age` and `sex` is included in the variable **$W_6$** (insurance status). When insurance companies consider this status, risk factors like income, social status,age and sex are definitely included. Thus, $W_6$ combines and covers influence from `age` and `sex` on the model.
+
+```{r}
+knitr::include_graphics('dag.PNG',dpi=50)
+knitr::include_graphics('dag_simple.PNG',dpi=50)
+```
+
+We state the structural equations F as the following : \
+
+**$W_1←f_{W_1}(U_{W_1})$**  \
+
+**$W_2←f_{W_2}(U_{W_2})$** \
+
+**$W_3←f_{W_3}(U_{W_3},W_1,W_2)$** \
+
+**$W_4←f_{W_4}(U_{W_4},W_1,W_2,W_3,A)$** \
+
+**$W_5←f_{W_5}(U_{W_5},W_1)$** \
+
+**$W_6←f_{W_6}(U_{W_6},W_1,W_2,W_5)$** \
+
+**$A←f_{A}(U_{A},W_1,W_2,W_5)$** \
+
+**$Y←f_{Y}(U_Y,W_3,W_4,W_5,W_6,A)$** \
+
+
+The following Table 3 shows the data after we specify the structural causal model.  
+```{r}
+df <- asthma %>% mutate(A = ifelse(as.numeric(`Physician Group`) == 1, 1, 0),
+                        W1 = ifelse(Age > mean(asthma$Age), 1, 0),
+                        W2 = ifelse(Sex == 'Male', 1, 0),
+                        W5 = ifelse(as.numeric(Education) >= 4, 1, 0),
+                        W3 = ifelse(as.numeric(Severity) >= 3, 1, 0),
+                        W4 = ifelse((`Standard Physical Comorbidity Scale` + `Standard Mental Comorbidity Scale`) / 2 >= 50,
+                                    1, 0),
+                        W6 = ifelse(as.numeric(`Insurance Status`) >= 3, 1, 0),
+                        Y = as.numeric(`Satisfaction Status of Patient`) - 1) %>%
+    select(A, W1, W2, W3, W4, W5, W6, Y)
+head(df)  %>%  kable(align = 'c', caption = "Table 3. Basic Information on Patients after we specify the SCM") %>% kable_classic_2()
+
+
+```
+
+# 4. Formal Target Causal Parameter
+
+In terms of the intervention node, it focuses on two treatment assignments $A$ from two physician groups for the asthma patients, which is treatment assignment 1 versus treatment assignment 2. The interventions of interest are:  Intervention 1: all patients taking treatment assignment 1; Intervention 2: all patients taking treatment assignment 2.  In SCM, our equation will become: \
+**$Y_1←f_{Y}(U_Y,W_3,W_4,W_5,W_6,1)$** \
+**$Y_0←f_{Y}(U_Y,W_3,W_4,W_5,W_6,0)$** \
+
+The target causal parameter is the difference in the counterfactual probability of patients as satisfied,if all patients taking treatment assignment 1, and the counterfactual probability of patients as satisfied, if all patients taking treatment assignment 2:
+
+**$P(Y_1=1)−P(Y_0=1)=E[Y_1]−E[Y_0]$** \
+
+where $Y_a$ denotes the counterfactual outcome under an intervention to set the two treatment assignment $A=a$.
+
+
+# 5. Observed data
+
+We assume the observed data $O=(W_1,W_2,W_3,W_4,W_5,W_6,A,Y)$ were generated by sampling n i.i.d. times from a data generating system compatible with the SCM. This provides a link between the causal model SCM and the observed data O. The distribution of the background variables $U$ and the structural equations $F$ identify the distribution of the endogenous variables $X$ and thus the distribution of the observed data O. We have not placed any restrictions on the statistical model, which is thereby non-parametric.
+
+
+# 6. Identify
+
+The goal of identification is to write our parameter estimate as a property of the counterfactual's distribution using only observed data. Thus, we first need to satisfy the conditional randomization that the back-door criterion is satisfied($Y_a {\perp \!\!\! \perp} A | W$). We need to have all paths between treatment and outcome are blocked after conditioning on some set of covariates. In the SCM, the target causal quantity identified. This study meets the sufficient, but not minimal, identifiability assumption stating that all of the unmeasured factors are independent. moreover, the back-door criterion holds conditionally on $W$. Equivalently, the counterfactual outcome $Y_a$ is conditionally independent of the treatment $A$, given $W$. Another part for the identification is positivity Assumption. We need to check $0 <𝑃(𝐴=𝑎|𝑊=𝑤) < 1, \ for \ all \ P(W=w) > 0$ and look at NPMLE estimates within strata of ($A,W$) to evaluate practical positivity concerns (Table 4). Among all the 50 combinations, there are only 6 combinations that has a probability equals to 0 (Table 5). This is acceptable in this project due to the ignorable effect.  
+
+For the positivity assumption, there are two situations. For the first and the forth cases in Table 5, they are in the same strata, meaning all the $W's$ are the same. So, they will not affect the result for the G-computational estimand. For the rest four rows, there should be some little effect on the final estimand. However, since there are sufficient strata, the bias caused by these four rows will be significantly small. Therefore, the positivity assumption is held.    
+
+```{r}
+df %>% group_by(A, W1, W2, W3, W4, W5, W6) %>% summarize(mean.Y = mean(Y)) %>%  head() %>% kable(align = 'c', caption = "Table 4. All possible combinations for positivity assumption") %>% kable_classic_2()
+
+
+df %>% group_by(A, W1, W2, W3, W4, W5, W6) %>% summarize(mean.Y = mean(Y)) %>% filter(mean.Y == 0) %>%  kable(align = 'c', caption = "Table 5. the  combinations with P = 0 for positivity assumption") %>% kable_classic_2()
+```
+
+# 7. Statistical Model and Estimand
+
+We first compute the causal risk difference $θ$ via the following G-computation. \
+
+$\hatθ_{sub}=E[E[Y|A=1,W]−E[Y|A=0,W]]=∑_{W_1}E[Y|A=1,W=w]−E[Y|A=0,W=w]P(W=w)$
+
+it is equivalently to be expressed as the IPTW estimand:
+
+\begin{align*}
+\hat\theta &=  \mathrm{E} \left[ \left(\frac{\mathrm{I}(A=1)}{\mathrm{P}(A|W)} - \frac{\mathrm{I}(A=0)}{\mathrm{P}(A|W)} \right) Y \right]
+\end{align*}
+
+For AIPW, we have: \
+
+\begin{align*}
+\hat\theta_{aipw}=\frac{1}{n}\sum_{i=1}^{n} \{ {\frac{A_i}{\hat{g}{(W_i)}}[Y_i-\hat{m}(W_{i})]+\hat{m}(W_i)]} \}
+\end{align*}
+
+For TMLE, we have: \
+
+\begin{align*}
+\hat{\theta}_{TMLE} =  \frac{1}{n} \sum_{i=1}^n  \bigg[ \tilde{m}(A_i,W_i) \bigg]
+\end{align*}
+
+
+# 6. Estimate
+There are four methods to explore the average causal effect (ACE).  
+
+## 6.1. G-computation with parametric regression
+For G-computation with parametric regression, we fit a saturated parametric model for the conditional mean: \
+
+$E(Y|A,W)=P(Y=1|A,W)=expit(β_0+β_1A+β_2W_1+β_3W_2+β_4W_3+β_5W_4+β_6W_5+β_7W_6)$ \
+
+The `glm` function is applied to estimate the conditional mean function $\mathrm{E}(Y|A,W)$ with logistic regression using the observed data as input. The result are shown below:   
+```{r}
+glm.gcomp <- glm(Y ~ A + W1 + W2 + W3 + W4 + W5 + W6, family = 'binomial', data = df)
+glm.gcomp
+```
+
+```{r}
+trt <- df %>% mutate(A = 1)
+ctrl <- df %>% mutate(A = 0)
+
+predict.Y.trt <- predict(glm.gcomp, newdata = trt, type = 'response')
+predict.Y.ctrl <- predict(glm.gcomp, newdata = ctrl, type = 'response')
+
+theta.gcomp.reg <- mean(predict.Y.trt-predict.Y.ctrl)
+theta.gcomp.reg %>% round(3)
+
+
+```
+
+
+The we make the data into two new data frames `trt` and `control` by setting $A=1$ for all units in `trt` and $A=0$ for all units in control. We evaluate the statistical parameter by substituting the predicted mean outcomes under the treatment and under the control into the G-Computation formula that is: \ 
+
+$\hat{\theta} = \frac{1}{n} \sum_{i=1}^n \bigg[ \hat{\mathrm{E}}(Y_i|A_i=1, W_{1_i}) - \hat{\mathrm{E}}(Y_i|A_i=0, W_{1_i})\bigg]$ \
+
+The result of $\hat{\theta}$ from G-computation with parametric regressions is 0.152 and that means the counterfactual probability of asthma patients getting satisfied would be 0.152 units higher if all patients taking treatment 1 than if all patients taking treatment 2.
+
+##  6.2. Inverse probability weighted estimator (IPTW)
+
+We continue with the Inverse probability weighted estimator (IPTW) by fitting logistic regression to estimate the treatment mechanism. The result is shown below:
+```{r}
+prob.AW.reg <- glm(A ~ W1 + W2 + W3 + W4 + W5 + W6, family = "binomial", data = df)
+prob.AW.reg$coef
+
+
+```
+
+We Obtain the predicted probability for each asthma patient's satisfaction status when having treatment 1 by giving the covariates $\hat{\mathrm{P}}(A_i|W_i)$ and also Obtain the predicted probability for each asthma patient's satisfaction status when having treatment 2 by : \
+
+$\hat{\mathrm{P}}(A=0|W) = 1 - \hat{\mathrm{P}}(A=1|W)$ \
+
+```{r}
+prob.1W <- predict(prob.AW.reg, type = "response")
+prob.0W <- 1 - prob.1W
+
+```
+
+Following we can examine the distribution of the predicted probabilities.
+```{r}
+n <- nrow(df)
+prob.AW <- rep(NA, n)
+# for sailors with scurvy, prob.AW = P(A=1 | W)
+prob.AW[df$A==1] <- prob.1W[df$A==1]
+# for sailors without scurvy, prob.AW = P(A=0 | W)
+prob.AW[df$A==0] <- prob.0W[df$A==0]
+# look at the distribution of predicted probabilities
+summary(prob.AW)
+
+```
+
+```{r}
+wt<- 1 / prob.AW
+# look at the distribution of weights
+summary(wt)
+```
+
+Finally, we evaluate the IPTW estimand by taking the empirical mean of the weighted outcomes:
+
+$\hat{\theta}_{IPTW} = \frac{1}{n}\sum_{i=1}^n \frac{\mathrm{I}(A_i=1)}{\hat{\mathrm{P}}(A_i|W_i)}Y_i - \frac{1}{n}\sum_{i=1}^n \frac{\mathrm{I}(A_i=0)}{\hat{\mathrm{P}}(A_i|W_i)}Y_i$
+
+```{r}
+# calculate IPTW theta
+theta.iptw <- mean(wt * as.numeric(df$A==1) * df$Y) - mean(wt * as.numeric(df$A==0) * df$Y)
+theta.iptw %>% round(3)
+
+
+```
+
+The result of $\hat{\theta}$ from IPTW is 0.124. This means the counterfactual probability of asthma patients getting satisfied would be 0.142 units higher if all patients taking treatment 1 than if all patients taking treatment 2. This method compared to G-computation is the same in formula perspective but the difference is that they estimate different probability. G-computation estimates the probability of $Y$ and IPTW estimates the probability of $A$, but they are both parametric.
+
+
+## 6.3. AIPW with SuperLearner
+
+Another way to explore the average causal effect is to check the performance of the augmented inverse probability weighted (AIPW) estimator. $\hat{\theta}_{aipw}$ is obtained through `SuperLearner`, a model selection algorithm.   
+```{r}
+X <- subset(df, select = c(A, W1, W2, W3, W4, W5, W6))
+X1 <- X %>% mutate(A = 1)
+X0 <- X %>% mutate(A = 0)
+
+
+library(SuperLearner)
+SL.library <- c("SL.glm", "SL.step", "SL.glm.interaction", "SL.mean")
+SL.outcome <- SuperLearner(Y = df$Y, X = X, SL.library = SL.library, family = "binomial")
+mAW <- predict(SL.outcome, newdata = df)$pred
+m1W <- predict(SL.outcome, newdata = X1)$pred
+m0W <- predict(SL.outcome, newdata = X0)$pred
+
+theta.gcomp.SL <- mean(m1W - m0W)
+theta.gcomp.SL %>% round(3)
+```
+
+The superlearner is constructed to build the best combination of algorithms. Based on the superlearner and G-computation (a.k.a. substitution estimator),   
+$\hat{\theta} = \frac{1}{n} \sum_{i=1}^n \bigg[ \hat{\mathrm{E}}(Y_i|A_i=1, W_{1_i}) - \hat{\mathrm{E}}(Y_i|A_i=0, W_{1_i})\bigg] = \frac{1}{n} \sum_{i=1}^n \bigg[\hat{m}(1,W) - \hat{m}(0,W) \bigg]=$ `r theta.gcomp.SL %>% round(3)`.   
+
+It is obvious to notice the gap between this value and the previous values calculated for $\hat{\theta}$. This smaller $\hat{\theta}$ indicates the small difference between two physician groups, showing the potential overfitting occurs in the superlearner. To deal with the problem of overfitting, we combine the IPW estimator with G-computation to have the Augmented IPW as following.
+
+$$
+\begin{align*}
+\hat{\theta}_{aipw} = \frac{1}{n} \sum_{i=1}^n \bigg[{{A_i}\over{\hat{g}(W_i)}}[Y_i-\hat{m}(W_i)]+\hat{m}(W_i] \bigg]
+\end{align*}
+$$
+
+```{r}
+
+gHat.SL <- SuperLearner(Y = df$A, X = subset(df, select = -c(A, Y)),
+                        SL.library = SL.library, family = "binomial")
+gHat1W <- gHat.SL$SL.predict
+gHat0W <- 1 - gHat1W
+
+theta.aipw.SL <- mean((as.numeric(df$A == 1) / gHat1W) * (df$Y - m1W) + m1W - m0W)
+theta.aipw.SL %>% round(3)
+```
+
+AIPW is a doubly robust estimator, which is less prone to model misspecification. $\hat{\theta}_{aipw}$ is consistent for $\theta$ if $\hat{g}$ is consistent for $g$ and/or $\hat{m}$ is consistent for $m$. $\hat{\theta}_{aipw} =$ `r theta.aipw.SL %>% round(3)` is close to the previous calculated estimator, showing that AIPW is worthy to be considered. This point estimate indicates is the marginal different in the expected satsfcation between two groups of treatment. It means that expected counterfactual treatment satisfaction is `r theta.aipw.SL %>% round(3)` higher if patients take the treatment from physician group 1 than if they take the treatment from physician group 2.
+
+## 6.4. TMLE with SuperLearner
+
+A targeted maximum likelihood estimator (TMLE) is also a doubly robust estimator. It is a general methodology for the construction of
+semi-parametric substitution estimators. Same with the other algorithms, we focus on estimation of the G-computation formula. Unlike the AIPW estimator, TMLE uses a ’targeting’ step that corrects the bias-variance tradeoff in the estimation. This is accomplished by fitting a parametric working model, where the observed $Y$ is modeled as a function of a transformation of the predicted probabilities of $X$ (often referred to as the clever covariate) with the outcome nuisance model predictions included as an offset. The targeted predictions under each value of $X$ from this model are averaged, and their difference provides an estimate of the ACE. 
+
+We implement TMLE by estimating $m(A,W), g(W)$, the clever covariate $H(A,W)$ and targeting the initial estimator. Estimating $m(A,W)$ and $g(W)$ is the same as the process in AIPW, we continue with the clever covariate $H(A,W)$ by the formula:  
+$$
+\begin{align*}
+\hat{H}(A,W) = \left(\frac{\mathrm{I}(A=1)}{\hat{g}(W)} - \frac{\mathrm{I}(A=0)}{1-\hat{g}(W)}  \right)
+\end{align*}
+$$  
+
+In the following, define $\hat{H}(1,W)$ as the clever covariate evaluated for all patients taking treatment from the physician group 1, and $\hat{H}(0,W)$ is the clever covariate evaluated for all patients taking treatment from the physician group 2.  
+
+```{r}
+H.AW <- as.numeric(df$A == 1) / gHat1W - as.numeric(df$A == 0) / gHat0W
+H.1W <- 1 / gHat1W
+H.0W <- -1 / gHat0W
+
+## IPTW under the SuperLearner
+# theta.iptw.SL <- mean(H.AW * df$Y)
+# theta.iptw.SL
+```
+
+When targeting the initial estimator, we estimate the resulting maximum likelihood estimate $\epsilon$ of the coefficient on the clever covariate by fitting the following logistic regression model:  
+$$
+\begin{align*}
+logit[m(A,W;\epsilon)] = logit[\hat{m}(A,W)] + \epsilon \hat{H}(A,W).
+\end{align*}
+$$
+```{r}
+logitUpdate <- glm(df$Y ~ -1 + offset(qlogis(mAW)) + H.AW, family = 'binomial')
+epsilon <- logitUpdate$coef
+epsilon
+```
+
+The calculated coefficient $\epsilon$ is `r epsilon`. Then we update the initial estimate $\hat{m}(A,M)$ based on the fluctuation model:  
+
+$$
+\begin{align*}
+logit[Y] &= logit [\hat{m}(A,W)] + \hat{\epsilon} \hat{H}(A,W) \\
+\tilde{m}(A,W) &=  expit \bigg[ logit\big[ \hat{m}(A,W) \big] + \hat{\epsilon} \hat{H}(A,W) \bigg]
+\end{align*}
+$$
+
+These preparations help to get targeted estimates of the expected outcome under the exposure $\tilde{m}(1,W)$ and under no exposure $\tilde{m}(1,W)$. Finally, $\hat{\theta}_{TMLE}$ is achieved from 
+$$
+\begin{align*}
+\hat{\theta}_{TMLE} & =  \frac{1}{n} \sum_{i=1}^n  \bigg[ \tilde{m}(A,W) \bigg] \\ 
+& = \frac{1}{n} \sum_{i=1}^n  \bigg[ \tilde{m}(1,W)- \tilde{m}(0,W)\bigg]
+\end{align*}
+$$
+
+```{r}
+mAW.star <- plogis(qlogis(mAW) + epsilon * H.AW)
+m1W.star <- plogis(qlogis(m1W) + epsilon * H.1W)
+m0W.star <- plogis(qlogis(m0W) + epsilon * H.0W)
+
+theta.tmle <- mean(m1W.star - m0W.star)
+theta.tmle %>% round(3)
+```
+
+$\hat{\theta}_{TMLE}$ is estimated by averaging the difference in the targeted predictions and is equal to `r theta.tmle %>% round(3)`. This point estimate is close to $\hat{\theta}_{aipw}$. It indicates is the marginal different in the expected satsfcation between two groups of treatment. It means that expected counterfactual treatment satisfaction is `r theta.tmle %>% round(3)` higher if patients take the treatment from physician group 1 than if they take the treatment from physician group 2.
+
+## 6.5. Cross-validation
+
+After applying different estimators above, we conduct the V-fold cross-validation to evaluate the performance of the Super Learner algorithm and find out the most suitable one. Different algorithms may perform well in some cases, but work terribly for other prediction problems. We focus on the 5-fold cross-validation and four candidate algorithms to include in SuperLearner’s library, such as `SL.glm`, `SL.step`, `SL.glm.interaction`, and `SL.mean` introduced in the following.
+
+- `SL.glm`: generalized linear model  
+
+- `SL.step`: GLM with stepwise model selection  
+
+- `SL.glm.interaction`: GLM with pairwise variable interactions  
+
+- `SL.mean`: marginal mean of the outcome (ignores all covariates)  
+
+```{r}
+set.seed(233)
+CV.SL <- CV.SuperLearner(Y = df$Y, X = X, family = 'gaussian', SL.library = SL.library,
+                         cvControl = list(V = 5), innerCvControl = list(list(V = 20)))
+summary(CV.SL)
+
+CV.SL$AllSL
+```
+
+All above five times of 5-fold cross-validation show the performance and competition among four candidate algorithms used in SuperLearner. The most suitable algorithm to be applied in `SuperLearner` is filtered based on the least cross-validated risk and coefficient. The risk is computed by Mean Squared Error(MSE). Coefficients show the weight of each algorithm in the each learning process below.  
+
+```{r}
+CV.SL$coef
+```
+
+We then find the Discrete Super Learner by selecting the algorithm with the lowest cross-validated risk estimate. 
+
+```{r}
+CV.SL$whichDiscrete
+```
+It turns out that `SL.glm` has the least risk in 3 out of 5 times of cross-validation. Thus, `SL.glm` is considered to be the most appropriate algorithm in the SUper Learner.
+
+
+## 6.6. Non-parametric Bootstrap
+```{r}
+run.tmle <- function (df, SL.library) {
+    
+    X <- subset(df, select = c(A, W1, W2, W3, W4, W5, W6))
+    X1 <- X %>% mutate(A = 1)
+    X0 <- X %>% mutate(A = 0)
+    
+    SL.outcome <- SuperLearner(Y = df$Y, X = X, SL.library = SL.library, family = "binomial")
+    mAW <- predict(SL.outcome, newdata = df)$pred
+    m1W <- predict(SL.outcome, newdata = X1)$pred
+    m0W <- predict(SL.outcome, newdata = X0)$pred
+    
+    theta.gcomp.SL <- mean(m1W - m0W)
+    
+    gHat.SL <- SuperLearner(Y = df$A, X = subset(df, select = -c(A, Y)),
+                            SL.library = SL.library, family = "binomial")
+    gHat1W <- gHat.SL$SL.predict
+    gHat0W <- 1 - gHat1W
+    
+    theta.aipw.SL <- mean((as.numeric(df$A == 1) / gHat1W) * (df$Y - m1W) + m1W - m0W)
+    
+    H.AW <- as.numeric(df$A == 1) / gHat1W - as.numeric(df$A == 0) / gHat0W
+    H.1W <- 1 / gHat1W
+    H.0W <- -1 / gHat0W
+    
+    theta.iptw.SL <- mean(H.AW * df$Y)
+    
+    logitUpdate <- glm(df$Y ~ -1 + offset(qlogis(mAW)) + H.AW, family = 'binomial')
+    epsilon <- logitUpdate$coef
+    
+    mAW.star <- plogis(qlogis(mAW) + epsilon * H.AW)
+    m1W.star <- plogis(qlogis(m1W) + epsilon * H.1W)
+    m0W.star <- plogis(qlogis(m0W) + epsilon * H.0W)
+    
+    theta.tmle <- mean(m1W.star - m0W.star)
+    
+    estimates <- data.frame(cbind(theta.gcomp.SL = theta.gcomp.SL, theta.iptw.SL, theta.aipw.SL, theta.tmle))
+    m.star <- c('theta.gcomp.SL', 'theta.iptw.SL', 'theta.aipw.SL', 'theta.tmle')
+    return(list(estimates = estimates, m.star = m.star, H.AW = H.AW))
+}
+```
+
+
+```{r}
+library(tmle)
+
+set.seed(24543)
+B <- 50
+estimates <- data.frame(matrix(NA, nrow = B, ncol = 4))
+for (b in 1:B) {
+    bootIndices <- sample(1:n, replace = T)
+    bootData <- df[bootIndices, ]
+    estimates[b, ] <- run.tmle(df = bootData, SL.library = SL.library)$estimates
+}
+
+colnames(estimates) <- c("SimpSubs", "IPTW", "AIPW", "TMLE")
+summary(estimates)
+```
+
+
+```{r}
+colVars <- colMeans(estimates ^ 2) - colMeans(estimates) ^ 2
+
+# se
+colSe <- sqrt(colVars) %>% round(3)
+names(colSe) <- c("se for SimpSubs", "se for IPTW", "se for AIPW", "se for TMLE")
+colSe
+
+# CI
+paste0('CI for ', c("SimpSubs", "IPTW", "AIPW", "TMLE"), ': (', round(colMeans(estimates) - 1.96 * colSe, 3),
+       ', ', round(colMeans(estimates) + 1.96 * colSe, 3), ').')
+```
+
+
+
+
+
+
+
+
+
+```{r, fig.height=8, fig.width=10}
+par(mfrow=c(2, 2))
+hist(estimates[,1], main="Histogram of point estimates from the Simple Substitution\n estimator over 50 bootstrapped samples", xlab = "Point Estimates", ylim = c(0, 20))
+hist(estimates[,2], main="Histogram of point estimates from\n IPTW estimator over 50 bootstrapped samples", xlab = "Point Estimates", ylim = c(0, 20))
+hist(estimates[,3], main="Histogram of point estimates from\n AIPW over 50 bootstrapped samples", xlab = "Point Estimates",  ylim = c(0, 25))
+hist(estimates[,4], main="Histogram of point estimates from\n TMLE over 50 bootstrapped samples", xlab = "Point Estimates", ylim = c(0, 20))
+```
+
+The bootstrap is a procedure that uses the given sample to create a new distribution that approximates the sampling distribution of a given statistic. This resulting distribution is called the bootstrap distribution. The bootstrap distribution is obtained by drawing samples of size n with replacement from the original sample and then compute the statistic for each sample. If we don’t want to make assumptions on the data generating distribution or we don’t want to rely on asymptotic results we can use bootstrap. In our case, the loop for bootstrap is 50 times so that we get 50 estimation of $\hat\theta$ for each method we use above and we observe the distribution for each bootstrap method. From the plot, we observe that the distribution obtained from simple substitution estimator and TMLE estimator is centralized. For IPTW and AIPW, the distribution is right skewed. From the interval that contains the most values, we observe that the intervals for all three methods lie on the range 0.10~0.15. We observe that the means from simple and IPTW is close and TMLE has a higher mean value than the other two. It happens since TMLE may contains more values on interval over 0.15.
+
+
+# 7. Result 
+
+After exploring the relationship between each factor in the asthma dataset, we construct a structural causal model (SCM) with 6 endogenous variables. The model emphasizes the casual inference in terms of satisfaction of asthma patients after treatment based on different treatment assignments.The positivity assumption focuses on NPMLE estimates within strata of (A,W). Among all 50 combinations, 6 combinations have a probability equals to 0. Even though not all combinations greater than 0, it is acceptable to have several combinations not meeting the requirement. We conclude that the positivity assumption is fulfilled in this case.    
+
+Afterwards, different estimators have been introduced to access the average causal effect (ACE). The list of estimators covered to assess the target causal parameter is parametric G-computation (simple substitution estimator), inverse probability of treatment weighted estimator (IPW), AIPW, and TMLE. All results with 95% confidence interval have been shown below (Table 6).
+
+
+|**Table 6. Estimand with 95% CI**|  
+| :------------: |
+
+| Estimand       | Value       |95% CI with se from boostrap  |   
+| :------------: | ----------: | --------:                    |
+| G-computation  | `r theta.gcomp.reg %>% round(3)`| (0.018, 0.218), se = 0.051   |
+| IPTW           | `r theta.iptw %>% round(3)`  | (0.02, 0.228), se = 0.053    |
+| AIPW           | `r theta.aipw.SL %>% round(3)` | (0.028, 0.24), se = 0.054   |        
+| TMLE           | `r theta.tmle %>% round(3)` | (0.047, 0.27), se = 0.057   |
+
+G-computation and IPW are paramatric methods. Augmented IPW and TMLE both use machine learning to solve model misspecification bias, while still allowing computation of CIs and p-values.These two doubly-robust cross-fit estimators have been applied in this study to yield better statistical properties. APIW employs the parametirc method, while TMLE is semiparametric. The values of $\hat{\theta}$ from G-computation and TMLE are around 0.15, while values of $\hat{\theta}$ from IPTW and AIPW are around 0.12. All 95% confidence intervals based on the bootstrapping have the similar width of the CI and close standard error. These four estimators indicate the noticeable influence of various treatment assignments ($A$) on patients' treatment satisfaction ($Y$). When evaluating the performance of different algorithms employed in the Super Learner, we apply the 5-fold cross validation to make the comparison among `SL.glm`, `SL.step`, `SL.glm.interaction`, and `SL.mean`. As `SL.glm` has the least cross-validated risk, it is recognized as the Discrete Super Learner. Additionally, the non-parametric bootstrap is performed for statistical inference/variance estimation. This method is more precise since it ensures small confidence intervals. All histograms visualize the results from the bootstrapping illustrate that the values of estimates are relatively concentrated. As a consequence, results from the non-parametric boosting is reasonable. Overall, the expected counterfactual treatment satisfaction is around 0.15 higher if patients take the treatment from physician group 1 than if they take the treatment from physician group 2. It is rational to believe that different treatment assignments will significantly influence the satisfaction of asthma patients and treatment effects.
+
+# 8. Limitation & Improvement
+There are some current limitations and future improvements in this study. To avoid the confounding effect on the judgment of patients' treatment satisfaction, this analysis  does not consider the influence from the factor `Drug Coverage Status`. The effect from this variable to our outcome variable `Treatment Satisfaction` in unclear since the dataset doesn't provide a clear definition and explanation on this. The uncertain relationship among `Drug Coverage Status`, `Treatment Assignment`, and `Treatment Satisfaction` makes the model so complicated that we recommend more research to do specifying what role of `Drug Coverage Status` can be in this study. Also, in the future, we may consider to contact the owner of the dataset to have further explanation. Additionally, there should be more solid evidence that proves our assumption of `age` and `sex` as two separate variable instead of just one. More real world study on this assumption will help this model more persuasive. Besides, it is highly likely that the measurement of patients' satisfaction of treatment is not objective. Patients may holds different opinion on what is the treatment satisfaction. Based on the various levels, patients may give different answers to the question of if they are satisfied with the treatment. These answers may change the predictions of the model and give the different answer. Thus, researchers need to consider the effects from subjectivity on the model. In addition, more future research is necessary to support the relationship we state in the model, including how different endogenous variables affecting $A$ and $Y$. One more future direction is to investigate why there is difference in treatment satisfaction between two groups as $\theta = 0.15$ and what makes the difference. Researchers may need to relate and analyze the results we find in the model with some real-life diagnosis and knowledge from biology and medicine. There could be other additional factors that are not covered in this model impacting the treatment satisfaction. The model will be improved if researchers study other potentially influencing factors.
+
+# Reference
+“Asthma Fact sheet No.307”. WHO. November 2013. Archived from the original on June 29, 2011. Retrieved 3 March 2016.
+
+Asthma patients dataset. JHSPH. 2018. http://www.biostat.jhsph.edu/~cfrangak/biostat_causal/asthma.txt.
+
+National Asthma Education and Prevention Program (2007). “Expert Panel Report 3: Guidelines for the Diagnosis and Management of Asthma”. National Heart Lung and Blood Institute. Archived from the original on 2013-10-19. Retrieved 2005-08-31.

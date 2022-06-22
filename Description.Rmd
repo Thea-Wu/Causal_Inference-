@@ -1,0 +1,202 @@
+---
+title: "Causal Inference Analysis of Asthma"
+subtitle: "WCM Modern Methods for Causal Inference Final Project"
+author: "Yunqing Ma, Xiang Li, Yifan Wu"
+date: "Jun 22, 2021"
+output:
+ html_document:
+   df_print: paged
+   toc: true # table of contents
+   toc_depth: 2  #three depths of headings (specified by #, ## and ###)
+   number_sections: false
+   theme: default    #many other themes as well
+   highlight: tango  # specifies the syntax highlighting style
+   toc_float:
+     collapsed: true
+     smooth_scroll: true
+   code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE,message=FALSE)
+```
+
+
+# Introduction 
+
+## Background
+
+Asthma is a long-term inflammatory disease of the airways of the lungs. (WHO,2013) There is no known cure for asthma, but it is easily treatable. Symptoms can be prevented by avoiding triggers, such as allergens and respiratory irritants, and suppressed with the use of inhaled corticosteroids. (NHLBI Guidline, 2017) Since there is no known cure for asthma, the judgment of asthma patients seems to be important to tell whether the treatment effect is good or bad.  
+
+Treatment assignments usually varies from doctor to doctor, which should lead to different therapeutic effects. Whether there is significant difference between different treatment assignments for asthma becomes a great question.  
+
+This project will analyze the satisfaction of asthma patients after treatment to determine whether different treatment assignments will significantly affect the treatment effect.  
+
+
+## Dataset description
+
+Two physician groups for asthma patients in California treated 276 patients in their own assignments, and collected several related variables. (JHSPH, 2018)  
+
+This data set contains 276 observations of asthma patients in California and we have the outcome variable as a binary variable of quality of service judge by the patients(1=satisfactory, 0 not satisfactory). we have our intervention variable as different treatment assignment from the two physician group.For other variables we have categorical variables: Sex,Age,Education,Insurance status,Drug coverage status,severity of the disease,total n.umber of comorbidity and two continuous variables: standard Physical Comorbidity Scale,standard Mental Comorbidity Scale.  
+
+**The following are the outline of dataset: **  
+
++ `Physician Group`: treatment assignment (categorical, 1 or 2)  
+
++ `Age`: patients' ages (continuous)  
+
++ `Sex`: patients' genders (binary)  
+
++ `Education`: patients' education levels (categorical)  
+
++ `Insurance Status`: patients' insurance coverage levels (categorical)  
+
++ `Drug Coverage Status`: the current status of patients whether they take the medicine (binary, yes or no)  
+
++ `Severity`: the severity level of asthma (categorial)  
+
++ `Total Number of Comorbidity`: patients' comorbidity (numerical)  
+
++ `Standard Physical Comorbidity Scale`: patients' physical comorbidity in the standard scale (continuous)  
+
++ `Standard Mental Comorbidity Scale`: patients' mental comorbidity in the standard scale (continuous)  
+
++ `Satisfaction Status of Patient`: the outcome of the treatment (binary, yes or no)  
+
+
+# Descriptive statistical analysis
+
+## Pre-view of the basic information
+```{r}
+asthma <- read.table("asthma.txt", sep = "" , header = T , na.strings ="", stringsAsFactors= F)
+
+dim(asthma)
+```
+
+```{r}
+library(tidyverse)
+asthma$pg <- as.factor(asthma$pg)
+asthma$i.sex = fct_collapse(factor(asthma$i.sex), Female = "1", Male = "0")
+asthma$i.educ <- as.factor(asthma$i.educ)
+asthma$i.insu <- as.factor(asthma$i.insu)
+asthma$i.drug = fct_collapse(factor(asthma$i.drug), Yes = "1", No = "0")
+asthma$i.seve <- as.factor(asthma$i.seve)
+asthma$i.aqoc = fct_collapse(factor(asthma$i.aqoc), Yes = "1", No = "0")
+asthma$pcs.sd <- round(asthma$pcs.sd, 3)
+asthma$mcs.sd <- round(asthma$mcs.sd, 3)
+
+sum(is.na(asthma))
+
+colnames(asthma)=c("Physician Group","Age","Sex","Education","Insurance Status","Drug Coverage Status","Severity","Total Number of Comorbidity","Standard Physical Comorbidity Scale","Standard Mental Comorbidity Scale","Satisfaction Status of Patient")  
+```
+
+The dimension of this dataset is 276 × 11. There are 276 obervations and 11 variables. No missing values are found. We first take a look at the first 6 observations to have a basic idea on the whole dataset (Table 1).
+
+```{r}
+library(kableExtra)
+head(asthma)  %>%  kable(align = 'c', caption = "Table 1. Basic Information on Patients") %>% kable_classic_2()
+```
+
+
+We then draw the contingency table for 10 factors corresponding to the satisfaction status of patients (Table 2).For continuous variables, we choose the two-sample t-test to show the p-value; for the categorial variables, we choose the Chi-Square test.
+
+```{r}
+library(compareGroups)
+library(dplyr)
+library(kableExtra)
+
+out <- compareGroups(`Satisfaction Status of Patient` ~ ., data = asthma, method = c(3,1,3,3,3,3,3,1,1,1), include.label = TRUE, simplify = T, byrow = TRUE)
+res <- createTable(out, show.p.overall = F, extra.labels = c("","", ""))
+#colnames(res$descr)[3] <- "p-value"
+compareGroups::export2md(res, caption = "Table 2. Contingency Table for the Quality of Service provided by Two Physician Groups") %>% kable_styling(c("responsive", "condensed", "hover"), fixed_thead = T)
+```
+
+## Data visualization
+First, we have an overview on the distribution of numerical variables, including the `age`, `Standard Physical Comorbidity Scale`,`Standard Mental Comorbidity Scale`.
+
+```{r}
+patient1 <- asthma %>% filter(`Physician Group` == 1)
+patient2 <- asthma %>% filter(`Physician Group` == 2)
+
+```
+
++ **Age**  
+
+```{r}
+attach(mtcars)
+par(mfrow=c(1,2))
+
+x<-patient1$Age
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Age",xlim=c(0,70),
+        ylim=c(0,0.08),main="Histogram with Density Curve \nfor Patient Group 1 by Age")
+#lines(density(x),col="blue", lwd=2)
+
+x<-patient2$Age
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Age",xlim=c(0,70),
+        ylim=c(0,0.08),main="Histogram with Density Curve \nfor Patient Group 2 by Age")
+#lines(density(x),col="blue", lwd=2)
+```
+
++ **Physical Comorbidity**  
+
+```{r fig.height=5, fig.width=7}
+par(mfrow=c(1,2))
+
+x<-patient1$`Standard Physical Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Physical Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.05),main="Histogram with Density Curve \nfor Patient Group 1 by \nPhysical Comorbidity")
+#lines(density(x),col="blue", lwd=2)
+
+x<-patient2$`Standard Physical Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Physical Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.06),main="Histogram with Density Curve \nfor Patient Group 2 by \nPhysical Comorbidity")
+#lines(density(x),col="blue", lwd=2)
+```
+
++ **Mental Comorbidity**  
+
+```{r}
+par(mfrow=c(1,2))
+
+x<-patient1$`Standard Mental Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Mental Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.05),main="Histogram with Density Curve \nfor Patient Group 1 by \nMental Comorbidity")
+#lines(density(x),col="blue", lwd=2)
+
+x<-patient2$`Standard Mental Comorbidity Scale`
+h<-hist(x, breaks=15, col="lightblue", border="black", prob = TRUE,xlab="Mental Comorbidity",xlim=c(0,80),
+        ylim=c(0,0.05),main="Histogram with Density Curve \nfor Patient Group 2 by \nMental Comorbidity")
+#lines(density(x),col="blue", lwd=2)
+```
+
+The six histograms with density curves show the rough normal distribution can be assumed for these three variables.  
+
+Typically, for patients' physical comorbidity, boxplots below illustrate the difference in treatment outcomes between physician groups 1 and 2. In terms of mental comorbidity, there are the same results from two physician groups.
+
+```{r}
+ggplot(asthma, aes(x =`Physician Group` , y = `Standard Physical Comorbidity Scale`)) +
+    geom_boxplot() +
+    ggtitle('Boxplot of Standard physical comorbidity scale by different treatment assignment') +
+    xlab('Treatment assignment') +
+    ylab('Standard physical comorbidity scale')
+
+
+ggplot(asthma, aes(x =`Physician Group` , y = `Standard Mental Comorbidity Scale`)) +
+    geom_boxplot() +
+    ggtitle('Boxplot of Standard Mental comorbidity scale by different treatment assignment') +
+    xlab('Treatment assignment') +
+    ylab('Standard Mental comorbidity scale')
+
+```
+
+
+
+
+# Reference
+
+"Asthma Fact sheet No.307". WHO. November 2013. Archived from the original on June 29, 2011.   Retrieved 3 March 2016.  
+
+Asthma patients dataset. JHSPH. 2018.   http://www.biostat.jhsph.edu/~cfrangak/biostat_causal/asthma.txt.  
+
+National Asthma Education and Prevention Program (2007). "Expert Panel Report 3: Guidelines for the Diagnosis and Management of Asthma". National Heart Lung and Blood Institute. Archived from the original on 2013-10-19. Retrieved 2005-08-31.
+
